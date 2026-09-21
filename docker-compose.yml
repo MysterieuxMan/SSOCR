@@ -6,10 +6,8 @@ services:
     container_name: ssocr-backend
     restart: always
     ports:
-      # Expose to localhost only so Nginx acts as reverse proxy and handles SSL (HTTPS)
-      - "127.0.0.1:8000:8000"
-      # Jika ingin bisa diakses langsung via IP:PORT tanpa Nginx, ganti baris di atas dengan:
-      # - "8000:8000"
+      # Host port 8001 -> Container port 8000 (menghindari konflik port 8000 di host VPS)
+      - "127.0.0.1:8001:8000"
     environment:
       - HOST=0.0.0.0
       - PORT=8000
