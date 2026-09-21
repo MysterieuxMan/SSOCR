@@ -6,8 +6,8 @@ services:
     container_name: ssocr-backend
     restart: always
     ports:
-      # Host port 8001 -> Container port 8000 (menghindari konflik port 8000 di host VPS)
-      - "127.0.0.1:8001:8000"
+      # Host port 8088 -> Container port 8000 (port 8000 dipakai uvicorn lokal, port 8001 dipakai stock-agent)
+      - "127.0.0.1:8088:8000"
     environment:
       - HOST=0.0.0.0
       - PORT=8000
