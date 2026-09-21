@@ -1,61 +1,88 @@
-# SSOCR
-Seven Segment Optical Character Recognition
+# SSOCR - Seven Segment Optical Character Recognition Backend
 
-## Algorithm
-![solution](images/solution.png)
+FastAPI-powered REST API backend for Seven Segment Optical Character Recognition (SSOCR), specifically optimized for digital weighing indicators and scale displays (LED & LCD).
 
+---
+
+## Architecture & Features
+
+- **FastAPI Engine**: High-performance asynchronous REST API with Swagger/OpenAPI documentation.
+- **Polarity Detection**: Automatically identifies bright digits on dark background (LED displays) vs dark digits on light background (LCD displays).
+- **Adaptive Image Pipeline**: Contrast Limited Adaptive Histogram Equalization (CLAHE), Gaussian blur, adaptive thresholding, and morphological opening/closing.
+- **Slant & Angle Tolerance**: Segment extraction accounting for 7-segment slant angle ($\theta$).
+- **Decimal Point & Sign Detection**: Detects decimal points (`.`) and negative signs (`-`).
+- **Mobile Integration Ready**: Multipart form-data image upload compatible with Android CameraX / Retrofit.
+
+---
+
+## Requirements & Setup
+
+### Using Miniconda / Virtualenv
+
+```bash
+# Activate your conda environment (e.g. miniconda)
+conda activate <your-env>
+
+# Install dependencies
+pip install -r requirements.txt
 ```
-DIGITS_LOOKUP = {
-    (1, 1, 1, 1, 1, 1, 0): 0,
-    (1, 1, 0, 0, 0, 0, 0): 1,
-    (1, 0, 1, 1, 0, 1, 1): 2,
-    (1, 1, 1, 0, 0, 1, 1): 3,
-    (1, 1, 0, 0, 1, 0, 1): 4,
-    (0, 1, 1, 0, 1, 1, 1): 5,
-    (0, 1, 1, 1, 1, 1, 1): 6,
-    (1, 1, 0, 0, 0, 1, 0): 7,
-    (1, 1, 1, 1, 1, 1, 1): 8,
-    (1, 1, 1, 0, 1, 1, 1): 9,
-    (0, 0, 0, 0, 0, 1, 1): '-'
+
+### Run Backend Server
+
+```bash
+# Start FastAPI server via Uvicorn
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+- **Swagger API Docs**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+- **Health Check**: `http://localhost:8000/health`
+
+---
+
+## API Endpoints
+
+### 1. Health Check
+- **Endpoint**: `GET /health`
+- **Response**:
+```json
+{
+  "status": "ok",
+  "version": "1.0.0"
 }
 ```
 
-Digital recognition of seven-segment digital tube is relatively simple compared to handwritten numeral.
-
-Detect the existence of the corresponding bit, then encode the image, you can accurately identify the number.
-
-
-## Requirements
-* opencv
-* numpy
-* matplotlib
-
-## Setup
-```
-git clone https://github.com/jiweibo/SSOCR.git
-python ssocr.py images/test1.bmp -s
-```
-
-## Results
-![test1.bmp](images/test1.bmp)
-![res1.bmp](images/res1.bmp)
-![test2.bmp](images/test2.bmp)
-![res2.bmp](images/res2.bmp)
-![test3.bmp](images/test3.bmp)
-![res3.bmp](images/res3.bmp)
-![test4.bmp](images/test4.bmp)
-![res4.bmp](images/res4.bmp)
-
-```
-$ python ssocr.py images\test1.BMP
-['-', 3, 0, '.', 3, 7]
-$ python ssocr.py images\test2.BMP -s
-[1, 7, 7, '.', 7]
-$ python ssocr.py images\test3.BMP -s
-[0, 7, 8, '.', 3]
-$ python ssocr.py images\test4.BMP -s
-[0, 7, 2, '.', 6]
+### 2. Recognize Weight
+- **Endpoint**: `POST /api/v1/ocr/recognize`
+- **Content-Type**: `multipart/form-data`
+- **Parameter**: `file` (Image file: JPEG, PNG, or BMP)
+- **Response**:
+```json
+{
+  "success": true,
+  "weight_text": "-30.37",
+  "numeric_value": -30.37,
+  "confidence": 1.0,
+  "raw_digits": ["-", "3", "0", ".", "3", "7"],
+  "processing_time_ms": 25.4,
+  "message": "Recognition successful"
+}
 ```
 
-## Acknowledge
-[SSOCR](https://www.unix-ag.uni-kl.de/~auerswal/ssocr/)
+---
+
+## Automated Tests
+
+Run the test suite:
+
+```bash
+python -m unittest discover tests
+```
+
+---
+
+## Android Client Integration
+
+For the Android native application in `D:\Code\weight-OCR`:
+- **Android Emulator**: `http://10.0.2.2:8000/`
+- **Physical Device**: `http://<YOUR_LAN_IP>:8000/` (configurable in the app's Settings screen).
