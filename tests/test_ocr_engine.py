@@ -49,6 +49,16 @@ class TestSevenSegmentOcrEngine(unittest.TestCase):
         self.assertEqual(res.weight_text, "072.6")
         self.assertAlmostEqual(res.numeric_value, 72.6, places=1)
 
+    def test_sample_image_lcd_0110(self):
+        img_path = os.path.join(self.images_dir, "test_lcd_0110.png")
+        self.assertTrue(os.path.exists(img_path))
+        with open(img_path, "rb") as f:
+            res = self.engine.process_image(f.read())
+        
+        self.assertTrue(res.is_valid)
+        self.assertEqual(res.weight_text, "0.110")
+        self.assertAlmostEqual(res.numeric_value, 0.11, places=2)
+
     def test_empty_input(self):
         res = self.engine.process_image(b"")
         self.assertFalse(res.is_valid)

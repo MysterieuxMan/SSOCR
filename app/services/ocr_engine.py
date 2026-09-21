@@ -223,18 +223,41 @@ class SevenSegmentOcrEngine:
             if h <= 0 or w <= 0:
                 continue
 
+            # Determine actual content vertical bounds within the ROI
+            pts = cv2.findNonZero(roi)
+            if pts is None:
+                continue
+            _, actual_by, _, actual_bh = cv2.boundingRect(pts)
+            eff_h = actual_by + actual_bh
+
             suppose_w = max(1, int(h / self.h_w_ratio))
+            orig_w = w
 
             # Filter out tiny noise contours
             roi_area = float((y1 - y0) * (x1 - x0))
             if x1 - x0 < 25 and (cv2.countNonZero(roi) / max(1.0, roi_area)) < 0.20:
                 continue
 
+            # Filter small isolated dirt/dust specks inside digit cavity (keeps decimal dots in bottom-right)
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(roi)
+            clean_roi = np.zeros_like(roi)
+            for li in range(1, num_labels):
+                area = stats[li, cv2.CC_STAT_AREA]
+                cw = stats[li, cv2.CC_STAT_WIDTH]
+                ch = stats[li, cv2.CC_STAT_HEIGHT]
+                cx = stats[li, cv2.CC_STAT_LEFT]
+                cy = stats[li, cv2.CC_STAT_TOP]
+                if area < 500 and cw < 30 and ch < 30 and not (cy > 0.60 * h and cx > 0.45 * w):
+                    continue
+                clean_roi[labels == li] = 255
+
             # Handle narrow digit '1' width adjustment
             if w < suppose_w / 2:
-                x0 = max(x0 + w - suppose_w, 0)
-                roi = thresh_img[y0:y1, x0:x1]
-                w = roi.shape[1]
+                x0_adj = max(x0 + w - suppose_w, 0)
+                clean_roi_adj = np.zeros((h, x1 - x0_adj), dtype=np.uint8)
+                clean_roi_adj[:, (x1 - x0_adj) - w:] = clean_roi
+                clean_roi = clean_roi_adj
+                w = clean_roi.shape[1]
 
             center_y = h // 2
             quater_y_1 = h // 4
@@ -264,26 +287,29 @@ class SevenSegmentOcrEngine:
                 if xb_c <= xa_c or yb_c <= ya_c:
                     continue
 
-                seg_roi = roi[ya_c:yb_c, xa_c:xb_c]
+                seg_roi = clean_roi[ya_c:yb_c, xa_c:xb_c]
                 total = cv2.countNonZero(seg_roi)
                 area = (xb_c - xa_c) * (yb_c - ya_c) * 0.90
-                if area > 0 and (total / float(area)) > 0.25:
+                # Balanced cutoff for vertical vs horizontal segments
+                cutoff = 0.20 if i in (0, 1, 2, 3, 4) else (0.23 if i == 5 else 0.25)
+                if area > 0 and (total / float(area)) > cutoff:
                     on[i] = 1
 
             digit, conf = self._match_digit_pattern(on)
             digits.append(digit)
             confidences.append(conf)
 
-            # Decimal point detection at the bottom right corner of the digit ROI
-            dot_roi_y0 = max(0, h - int(3 * width / 4))
-            dot_roi_x0 = max(0, w - int(3 * width / 4))
-            dot_roi = roi[dot_roi_y0:h, dot_roi_x0:w]
-            dot_area = (9.0 / 16.0) * width * width
-            if dot_area > 0 and dot_roi.size > 0:
-                dot_density = cv2.countNonZero(dot_roi) / float(dot_area)
-                if dot_density > 0.65:
-                    digits.append(".")
-                    confidences.append(1.0)
+            # Decimal point detection at the bottom right corner of the digit ROI using effective content height
+            if digit in "0123456789":
+                dot_roi_y0 = max(0, eff_h - int(3 * width / 4))
+                dot_roi_x0 = max(0, w - int(3 * width / 4))
+                dot_roi = roi[dot_roi_y0:eff_h, dot_roi_x0:w]
+                dot_area = (9.0 / 16.0) * width * width
+                if dot_area > 0 and dot_roi.size > 0:
+                    dot_density = cv2.countNonZero(dot_roi) / float(dot_area)
+                    if dot_density > 0.55:
+                        digits.append(".")
+                        confidences.append(1.0)
 
         avg_conf = float(np.mean(confidences)) if confidences else 0.0
         return digits, avg_conf
