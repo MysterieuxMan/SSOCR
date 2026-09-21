@@ -307,7 +307,7 @@ class SevenSegmentOcrEngine:
                 dot_area = (9.0 / 16.0) * width * width
                 if dot_area > 0 and dot_roi.size > 0:
                     dot_density = cv2.countNonZero(dot_roi) / float(dot_area)
-                    if dot_density > 0.55:
+                    if dot_density > 0.40:
                         digits.append(".")
                         confidences.append(1.0)
 
@@ -339,6 +339,26 @@ class SevenSegmentOcrEngine:
                     cleaned.append(s)
             else:
                 cleaned.append(s)
+
+        # Remove trailing dot if it has no subsequent decimal digits
+        if cleaned and cleaned[-1] == ".":
+            cleaned.pop()
+            has_dot = "." in cleaned
+
+        # Rule: If leading digit is '0' (or '-0') followed by other digits,
+        # but no decimal point was detected (e.g. round/faint dot like in '0110'),
+        # insert decimal point immediately after '0' -> '0.110'
+        zero_idx = None
+        if cleaned and cleaned[0] == "0":
+            zero_idx = 0
+        elif len(cleaned) > 1 and cleaned[0] == "-" and cleaned[1] == "0":
+            zero_idx = 1
+
+        if zero_idx is not None and not has_dot:
+            subsequent = [c for c in cleaned[zero_idx + 1:] if c.isdigit()]
+            if subsequent:
+                cleaned.insert(zero_idx + 1, ".")
+                has_dot = True
 
         text = "".join(cleaned).strip()
         try:

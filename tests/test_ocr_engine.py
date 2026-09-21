@@ -65,6 +65,37 @@ class TestSevenSegmentOcrEngine(unittest.TestCase):
         self.assertEqual(res.weight_text, "")
         self.assertIsNone(res.numeric_value)
 
+    def test_leading_zero_decimal_formatting(self):
+        # Case 1: Missing dot in '0110' should automatically format as '0.110'
+        text, val = self.engine.format_recognized_symbols(["0", "1", "1", "0"])
+        self.assertEqual(text, "0.110")
+        self.assertAlmostEqual(val, 0.11, places=2)
+
+        # Case 2: Negative leading zero without dot
+        text, val = self.engine.format_recognized_symbols(["-", "0", "1", "1", "0"])
+        self.assertEqual(text, "-0.110")
+        self.assertAlmostEqual(val, -0.11, places=2)
+
+        # Case 3: Single zero stays '0'
+        text, val = self.engine.format_recognized_symbols(["0"])
+        self.assertEqual(text, "0")
+        self.assertAlmostEqual(val, 0.0, places=1)
+
+        # Case 4: Multiple zeros '005' becomes '0.05'
+        text, val = self.engine.format_recognized_symbols(["0", "0", "5"])
+        self.assertEqual(text, "0.05")
+        self.assertAlmostEqual(val, 0.05, places=2)
+
+        # Case 5: Already has dot after zero '0.110' stays '0.110'
+        text, val = self.engine.format_recognized_symbols(["0", ".", "1", "1", "0"])
+        self.assertEqual(text, "0.110")
+        self.assertAlmostEqual(val, 0.11, places=2)
+
+        # Case 6: Dot already present elsewhere (e.g. '078.3') preserves dot position
+        text, val = self.engine.format_recognized_symbols(["0", "7", "8", ".", "3"])
+        self.assertEqual(text, "078.3")
+        self.assertAlmostEqual(val, 78.3, places=1)
+
 
 if __name__ == "__main__":
     unittest.main()
