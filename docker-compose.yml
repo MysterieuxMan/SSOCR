@@ -6,8 +6,10 @@ services:
     container_name: ssocr-backend
     restart: always
     ports:
-      # Host port 8088 -> Container port 8000 (port 8000 dipakai uvicorn lokal, port 8001 dipakai stock-agent)
+      # Host port 8088 -> Container port 8000
       - "127.0.0.1:8088:8000"
+    env_file:
+      - .env
     environment:
       - HOST=0.0.0.0
       - PORT=8000
