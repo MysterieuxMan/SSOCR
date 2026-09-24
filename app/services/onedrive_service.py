@@ -11,8 +11,8 @@ logger = logging.getLogger("OneDriveService")
 
 
 class OneDriveService:
-    """Service to interact with Microsoft Graph API using Client Credentials Flow (Option 1).
-    Allows appending rows to OneDrive / SharePoint Excel workbooks without interactive user login.
+    """Service to interact with Microsoft Graph API using Client Credentials Flow or
+    Power Automate Webhook (Option 2 - No Admin Consent Required).
     """
 
     def __init__(self):
@@ -102,7 +102,36 @@ class OneDriveService:
         file_path: Optional[str] = None,
         user_email: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Appends a row to an Excel table in OneDrive/SharePoint via Microsoft Graph API."""
+        """Appends a row to an Excel table in OneDrive/SharePoint via Power Automate Webhook
+        or Microsoft Graph API.
+        """
+        # 1. Check if Power Automate Webhook is configured (bypasses Entra ID permissions)
+        webhook_target = (
+            settings.POWER_AUTOMATE_WEBHOOK_URL
+            or (sharing_url if sharing_url and ("powerplatform.com" in sharing_url or "logic.azure.com" in sharing_url) else None)
+            or (file_path if file_path and ("powerplatform.com" in file_path or "logic.azure.com" in file_path) else None)
+        )
+
+        if webhook_target:
+            logger.info(f"Dispatching weighing row via Power Automate Webhook")
+            webhook_payload = {
+                "id": str(row_values[0]) if len(row_values) > 0 else "",
+                "tanggal": str(row_values[1]) if len(row_values) > 1 else "",
+                "waktu": str(row_values[2]) if len(row_values) > 2 else "",
+                "berat": float(row_values[3]) if len(row_values) > 3 else 0.0,
+                "unit": str(row_values[4]) if len(row_values) > 4 else "kg",
+                "status": str(row_values[5]) if len(row_values) > 5 else "Synced",
+            }
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                res = await client.post(webhook_target, json=webhook_payload)
+                if res.status_code in (200, 201, 202):
+                    logger.info("Successfully dispatched to Power Automate webhook.")
+                    return {"status": "success", "via": "power_automate_webhook", "code": res.status_code}
+                error_msg = f"Power Automate Webhook returned error ({res.status_code}): {res.text}"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+        # 2. Microsoft Graph API fallback
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
@@ -115,7 +144,6 @@ class OneDriveService:
         target_user_email = user_email or settings.EXCEL_DEFAULT_USER_EMAIL
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Determine API URL endpoint
             if sharing_url:
                 resolved_drive_id, resolved_item_id = await self.resolve_sharing_url(client, token, sharing_url)
                 api_url = (
@@ -140,8 +168,8 @@ class OneDriveService:
                 )
             else:
                 raise ValueError(
-                    "Target Excel tidak lengkap. Harap sertakan `sharing_url`, atau kombinasi "
-                    "(`drive_id` + `item_id`), atau (`user_email` + `file_path`)."
+                    "Target Excel tidak lengkap. Harap sertakan `POWER_AUTOMATE_WEBHOOK_URL` di .env, "
+                    "`sharing_url`, atau kombinasi (`user_email` + `file_path`)."
                 )
 
             body = {"values": [row_values]}
